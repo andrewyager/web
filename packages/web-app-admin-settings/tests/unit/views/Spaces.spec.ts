@@ -228,6 +228,15 @@ describe('Spaces view', () => {
       expect(wrapper.findComponent(AppTemplate).props('batchActionsLoading')).toBeTruthy()
     })
   })
+  it('stops loading the spaces without an error when leaving the page', async () => {
+    const errorHandler = vi.fn()
+    const { wrapper } = getWrapper({ pendingSpaces: true, errorHandler })
+
+    wrapper.unmount()
+    await flushPromises()
+
+    expect(errorHandler).not.toHaveBeenCalled()
+  })
 })
 
 function getSideBarPanels(wrapper: ReturnType<typeof getWrapper>['wrapper']) {
@@ -246,10 +255,22 @@ function getWrapper({
     } as SpaceResource
   ],
   selectedSpaces = [],
-  stubActions = true
-}: { spaces?: SpaceResource[]; selectedSpaces?: SpaceResource[]; stubActions?: boolean } = {}) {
+  stubActions = true,
+  pendingSpaces = false,
+  errorHandler = undefined
+}: {
+  spaces?: SpaceResource[]
+  selectedSpaces?: SpaceResource[]
+  stubActions?: boolean
+  pendingSpaces?: boolean
+  errorHandler?: (err: unknown) => void
+} = {}) {
   const $clientService = mockDeep<ClientService>()
-  $clientService.graphAuthenticated.drives.listAllDrives.mockResolvedValue(spaces)
+  if (pendingSpaces) {
+    $clientService.graphAuthenticated.drives.listAllDrives.mockReturnValue(new Promise(() => {}))
+  } else {
+    $clientService.graphAuthenticated.drives.listAllDrives.mockResolvedValue(spaces)
+  }
   $clientService.graphAuthenticated.permissions.listPermissions.mockResolvedValue({
     shares: [],
     allowedActions: [],
@@ -283,7 +304,8 @@ function getWrapper({
           OcBreadcrumb: true,
           BatchActions: true,
           ViewOptions: true
-        }
+        },
+        config: { errorHandler }
       }
     })
   }
