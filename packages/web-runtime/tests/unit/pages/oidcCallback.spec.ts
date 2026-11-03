@@ -93,6 +93,44 @@ describe('oidcCallback page', () => {
       expect(signInCallbackSpy).toHaveBeenCalledWith('access-token', 'session-id')
     })
 
+    it('ignores a token update event without an access token and keeps listening', () => {
+      mockUseEmbedMode.mockReturnValue({
+        isDelegatingAuthentication: computed(() => true),
+        postMessage: postMessageMock,
+        verifyDelegatedAuthenticationOrigin: vi.fn().mockReturnValue(true)
+      })
+
+      const signInCallbackSpy = vi
+        .spyOn(authService, 'signInCallback')
+        .mockImplementation(() => Promise.resolve())
+      const addEventListenerSpy = vi.spyOn(window, 'addEventListener')
+
+      getWrapper()
+
+      const [, handler] = addEventListenerSpy.mock.calls.find(([type]) => type === 'message')
+      const listener = handler as (event: MessageEvent) => void
+
+      expect(() =>
+        listener(new MessageEvent('message', { data: { name: 'opencloud-embed:update-token' } }))
+      ).not.toThrow()
+      listener(
+        new MessageEvent('message', { data: { name: 'opencloud-embed:update-token', data: {} } })
+      )
+      expect(signInCallbackSpy).not.toHaveBeenCalled()
+
+      listener(
+        new MessageEvent('message', {
+          data: {
+            name: 'opencloud-embed:update-token',
+            data: { access_token: 'access-token', session_id: 'session-id' }
+          }
+        })
+      )
+      expect(signInCallbackSpy).toHaveBeenCalledWith('access-token', 'session-id')
+
+      addEventListenerSpy.mockRestore()
+    })
+
     it('when token update event is received but name is incorrect does not call signInCallback', async () => {
       mockUseEmbedMode.mockReturnValue({
         isDelegatingAuthentication: computed(() => true),
